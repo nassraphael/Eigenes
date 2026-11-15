@@ -1,0 +1,2240 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Motion Guard – Motion Detection Camera</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            m3: {
+              darkBg: '#090D16',
+              darkSurface: '#121826',
+              darkCard: '#192234',
+              darkBorder: '#27334A',
+              lightBg: '#F3F6FB',
+              lightSurface: '#FFFFFF',
+              lightCard: '#E9EFF8',
+              lightBorder: '#D2DEEE',
+              primary: '#3B82F6',
+              danger: '#EF4444',
+              success: '#10B981',
+              warning: '#F59E0B',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior-y: contain;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.32);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #3B82F6;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+      border: 2px solid #ffffff;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.9); opacity: 0.9; }
+      70% { transform: scale(1.95); opacity: 0; }
+      100% { transform: scale(1.95); opacity: 0; }
+    }
+    .pulse-ring::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 9999px;
+      background-color: inherit;
+      animation: pulseRing 1.6s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+    @keyframes alarmPulse {
+      0%, 100% { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.95), 0 0 28px rgba(239, 68, 68, 0.65); }
+      50% { box-shadow: inset 0 0 0 8px rgba(239, 68, 68, 0.35), 0 0 8px rgba(239, 68, 68, 0.2); }
+    }
+    .alarm-active-frame {
+      animation: alarmPulse 0.7s infinite;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body class="bg-m3-lightBg text-slate-900 dark:bg-m3-darkBg dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 select-none">
+
+  <!-- TOP APP BAR (Liquid Glass + Material 3) -->
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-m3-darkSurface/80 border-b border-m3-lightBorder dark:border-m3-darkBorder px-4 py-3">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-blue-600/15 dark:bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-inner">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight leading-tight">Motion Guard</h1>
+            <span class="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/25">Lokal</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Echtzeit-Bewegungserkennung &amp; Objekt-Fokus</p>
+        </div>
+      </div>
+
+      <!-- Navigation Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="nav-logs-btn" type="button" aria-label="Bewegungsprotokoll öffnen"
+          class="relative p-2.5 rounded-2xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 border border-m3-lightBorder dark:border-m3-darkBorder transition active:scale-95">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+          <span id="log-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shadow">0</span>
+        </button>
+
+        <button id="nav-settings-btn" type="button" aria-label="Einstellungen öffnen"
+          class="p-2.5 rounded-2xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 border border-m3-lightBorder dark:border-m3-darkBorder transition active:scale-95">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 max-w-4xl w-full mx-auto flex flex-col">
+
+    <!-- ========================================================= -->
+    <!-- VIEW 1: HAUPTBILDSCHIRM                                   -->
+    <!-- ========================================================= -->
+    <section id="view-main" class="flex-1 flex flex-col p-3 sm:p-5 gap-4">
+
+      <!-- Camera Viewport Card -->
+      <div id="camera-wrapper" class="relative flex-1 min-h-[360px] sm:min-h-[450px] rounded-3xl overflow-hidden bg-slate-950 border border-m3-lightBorder dark:border-m3-darkBorder shadow-xl flex items-center justify-center">
+        
+        <!-- Live Video Stream -->
+        <video id="camera-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+
+        <!-- Heatmap & Live Tracking Bounding Box Overlay Canvas -->
+        <canvas id="overlay-canvas" class="absolute inset-0 w-full h-full object-cover pointer-events-none hidden"></canvas>
+
+        <!-- Offscreen Canvases for Analysis & High-Res Snapshot Highlighting -->
+        <canvas id="analysis-canvas" class="hidden"></canvas>
+        <canvas id="snapshot-canvas" class="hidden"></canvas>
+
+        <!-- Center Detection Zone Guide Overlay -->
+        <div id="center-zone-box" class="hidden absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div class="w-1/2 h-1/2 border-2 border-dashed border-cyan-400/80 rounded-2xl bg-cyan-400/5 flex items-end justify-center pb-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-cyan-300 bg-slate-950/75 px-2.5 py-0.5 rounded-full">Erkennungsbereich</span>
+          </div>
+        </div>
+
+        <!-- Idle / Standby Placeholder -->
+        <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-slate-900 to-slate-950">
+          <div class="w-20 h-20 rounded-3xl bg-slate-800/80 border border-slate-700 flex items-center justify-center mb-4 text-slate-400">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 class="text-white font-semibold text-lg mb-1">Kamera im Standby</h2>
+          <p class="text-slate-400 text-sm max-w-xs">
+            Tippe unten auf <span class="text-blue-400 font-medium">„Überwachung starten“</span>, um die lokale Echtzeit-Analyse mit Detail-Hervorhebung zu aktivieren.
+          </p>
+          <div class="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Lokal • Browser-Speicher • Kein Mikrofon</span>
+          </div>
+        </div>
+
+        <!-- Top Overlay Badges & Quick Controls -->
+        <div id="live-top-controls" class="hidden absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
+          <div class="flex items-center gap-2 pointer-events-auto">
+            <span id="wakelock-badge" class="hidden px-2.5 py-1 rounded-full bg-slate-950/75 backdrop-blur-md border border-white/10 text-[11px] font-medium text-amber-300 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Display aktiv
+            </span>
+            <span id="fps-badge" class="px-2.5 py-1 rounded-full bg-slate-950/75 backdrop-blur-md border border-white/10 text-[11px] font-medium text-slate-200">
+              10 FPS
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="quick-torch-btn" type="button" title="Taschenlampe umschalten"
+              class="p-2.5 rounded-2xl bg-slate-950/75 hover:bg-slate-900 backdrop-blur-md border border-white/15 text-white transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </button>
+            <button id="quick-flip-btn" type="button" title="Kamera wechseln (Front/Rück)"
+              class="p-2.5 rounded-2xl bg-slate-950/75 hover:bg-slate-900 backdrop-blur-md border border-white/15 text-white transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Arming Countdown Banner -->
+        <div id="arming-banner" class="hidden absolute inset-0 z-20 bg-slate-950/65 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center">
+          <div class="px-5 py-3.5 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-200 shadow-lg">
+            <p class="text-xs uppercase tracking-wider font-semibold text-amber-400 mb-0.5">Scharfschaltung läuft</p>
+            <p id="arming-countdown-text" class="text-xl font-bold text-white">Aktiv in 2.0 Sek...</p>
+          </div>
+        </div>
+
+        <!-- MOTION DETECTED ALERT BANNER WITH LIVE SNAPSHOT THUMBNAIL -->
+        <div id="motion-alert-banner" class="hidden absolute top-16 left-3 right-3 z-30 transition-all duration-200">
+          <div class="rounded-2xl bg-red-600/95 backdrop-blur-md text-white p-3 shadow-2xl border border-red-400/50 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <img id="alert-snapshot-thumb" alt="Erkannte Bewegung" class="hidden w-14 h-11 rounded-xl object-cover border border-white/40 bg-black shrink-0 cursor-pointer" />
+              <div id="alert-fallback-icon" class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="font-bold text-base leading-tight">Bewegung erkannt!</p>
+                <p id="motion-alert-subtext" class="text-xs text-red-100 truncate">Detail hervorgehoben &amp; gespeichert</p>
+              </div>
+            </div>
+            <span id="motion-intensity-pill" class="px-2.5 py-1 rounded-xl bg-black/30 text-xs font-extrabold shrink-0">0%</span>
+          </div>
+        </div>
+
+        <!-- Bottom Live Activity Meter -->
+        <div id="live-meter-bar" class="hidden absolute bottom-3 left-3 right-3 z-20 rounded-2xl bg-slate-950/75 backdrop-blur-md border border-white/10 px-3.5 py-2.5">
+          <div class="flex items-center justify-between text-xs mb-1.5">
+            <span class="text-slate-300 font-medium">Bewegungsaktivität</span>
+            <span id="live-activity-value" class="font-mono font-semibold text-blue-400">0% / Schwelle 100%</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div id="live-activity-fill" class="h-full w-0 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500 transition-all duration-100"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last Captured Motion Detail Preview Card (Shown when a snapshot exists) -->
+      <div id="last-capture-card" class="hidden rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-3.5 shadow-md flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="relative shrink-0 cursor-pointer group" id="last-capture-img-wrap">
+            <img id="last-capture-img" alt="Letzte erkannte Bewegung" class="w-20 h-14 rounded-2xl object-cover border border-red-500/40 bg-slate-900" />
+            <span class="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] text-white font-semibold">Zoom</span>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-red-500"></span>
+              <p class="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Letztes bewegtes Detail</p>
+            </div>
+            <p id="last-capture-meta" class="text-sm font-semibold truncate mt-0.5">Heute, --:--:-- Uhr</p>
+            <p id="last-capture-detail" class="text-xs text-slate-500 dark:text-slate-400 truncate">Klicken zum Vergrößern</p>
+          </div>
+        </div>
+        <button id="last-capture-open-btn" type="button"
+          class="px-3 py-2 rounded-2xl bg-blue-600/15 hover:bg-blue-600/25 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 transition">
+          Ansehen
+        </button>
+      </div>
+
+      <!-- Control Panel Surface (Material 3 Bottom Card) -->
+      <div class="rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-4 sm:p-5 shadow-lg flex flex-col gap-4">
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span id="status-dot" class="relative w-3 h-3 rounded-full bg-slate-400 inline-block"></span>
+            <span id="status-text" class="font-bold text-base text-slate-600 dark:text-slate-300">Überwachung pausiert</span>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>Empf.: <strong id="quick-sens-label" class="text-slate-800 dark:text-slate-200">60%</strong></span>
+            <span>•</span>
+            <button id="quick-logs-link" type="button" class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+              Protokoll (<span id="quick-log-count">0</span>)
+            </button>
+          </div>
+        </div>
+
+        <button id="toggle-monitoring-btn" type="button"
+          class="w-full py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2.5 transition">
+          <svg id="toggle-btn-icon" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span id="toggle-btn-text">Überwachung starten</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 2: BEWEGUNGSPROTOKOLL MIT SNAPSHOT-GALERIE           -->
+    <!-- ========================================================= -->
+    <section id="view-logs" class="hidden flex-1 flex flex-col p-3 sm:p-5 gap-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <button id="logs-back-btn" type="button" class="p-2.5 rounded-2xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h2 class="text-xl font-bold">Bewegungsprotokoll</h2>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="export-logs-btn" type="button" title="Als CSV herunterladen"
+            class="px-3 py-2 rounded-2xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-800 transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            CSV
+          </button>
+          <button id="clear-all-logs-btn" type="button"
+            class="px-3 py-2 rounded-2xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Alle löschen
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Counter Card -->
+      <div class="rounded-3xl bg-blue-600/10 dark:bg-blue-500/15 border border-blue-500/25 p-4 flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Erkannte Ereignisse gesamt</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Inkl. Detail-Markierung lokal in IndexedDB gespeichert</p>
+        </div>
+        <span id="logs-total-count" class="text-3xl font-extrabold text-blue-600 dark:text-blue-400">0</span>
+      </div>
+
+      <!-- Log Entries List -->
+      <div id="logs-list-container" class="flex-1 flex flex-col gap-3 overflow-y-auto pb-6">
+        <!-- Populated safely via DOM APIs -->
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 3: EINSTELLUNGSMENÜ                                  -->
+    <!-- ========================================================= -->
+    <section id="view-settings" class="hidden flex-1 flex flex-col p-3 sm:p-5 gap-4 pb-10">
+      <div class="flex items-center gap-2">
+        <button id="settings-back-btn" type="button" class="p-2.5 rounded-2xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 class="text-xl font-bold">Einstellungen</h2>
+      </div>
+
+      <!-- 1. BEWEGUNGSERKENNUNG -->
+      <div class="rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-5 flex flex-col gap-4 shadow-sm">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Bewegungserkennung</h3>
+
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Bewegungserkennung aktiv</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Analysiert Bildunterschiede in Echtzeit</p>
+          </div>
+          <input id="set-motion-enabled" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <div class="h-px bg-m3-lightBorder dark:bg-m3-darkBorder"></div>
+
+        <!-- Sensitivity -->
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-semibold text-sm">Empfindlichkeit</span>
+            <span id="val-sensitivity" class="text-sm font-bold text-blue-600 dark:text-blue-400">60%</span>
+          </div>
+          <input id="set-sensitivity" type="range" min="1" max="100" value="60" />
+          <div class="grid grid-cols-3 gap-2 mt-2.5">
+            <button type="button" data-sens-preset="25" class="sens-preset-btn py-1.5 rounded-xl text-xs font-semibold border border-m3-lightBorder dark:border-m3-darkBorder bg-m3-lightCard dark:bg-m3-darkCard hover:border-blue-500 transition">Niedrig (25%)</button>
+            <button type="button" data-sens-preset="60" class="sens-preset-btn py-1.5 rounded-xl text-xs font-semibold border border-m3-lightBorder dark:border-m3-darkBorder bg-m3-lightCard dark:bg-m3-darkCard hover:border-blue-500 transition">Mittel (60%)</button>
+            <button type="button" data-sens-preset="88" class="sens-preset-btn py-1.5 rounded-xl text-xs font-semibold border border-m3-lightBorder dark:border-m3-darkBorder bg-m3-lightCard dark:bg-m3-darkCard hover:border-blue-500 transition">Hoch (88%)</button>
+          </div>
+        </div>
+
+        <!-- Noise Reduction Filter -->
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Rauschunterdrückung (3×3 Glättung)</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Minimiert Sensorrauschen &amp; Fehlalarme bei Dunkelheit</p>
+          </div>
+          <input id="set-noise-filter" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <!-- Minimum Motion Duration -->
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-semibold text-sm">Mindestdauer einer Bewegung</span>
+            <span id="val-min-duration" class="text-sm font-bold text-blue-600 dark:text-blue-400">300 ms</span>
+          </div>
+          <input id="set-min-duration" type="range" min="0" max="2000" step="100" value="300" />
+        </div>
+
+        <!-- Arming Delay -->
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-semibold text-sm">Erkennungsverzögerung beim Start</span>
+            <span id="val-detection-delay" class="text-sm font-bold text-blue-600 dark:text-blue-400">2 Sek.</span>
+          </div>
+          <input id="set-detection-delay" type="range" min="0" max="10" step="1" value="2" />
+        </div>
+
+        <!-- Cooldown -->
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-semibold text-sm">Wartezeit zwischen Alarmen</span>
+            <span id="val-cooldown" class="text-sm font-bold text-blue-600 dark:text-blue-400">3 Sek.</span>
+          </div>
+          <input id="set-cooldown" type="range" min="1" max="15" step="1" value="3" />
+        </div>
+
+        <div class="h-px bg-m3-lightBorder dark:bg-m3-darkBorder"></div>
+
+        <!-- Center Zone Only -->
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Nur mittleren Erkennungsbereich prüfen</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Blendet Bewegungen am Bildrand aus</p>
+          </div>
+          <input id="set-center-zone" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <!-- Live Tracking Box & Heatmap -->
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Live-Tracking-Rahmen &amp; Heatmap</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Rahmt bewegte Objekte direkt im Kamerabild ein</p>
+          </div>
+          <input id="set-show-heatmap" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <!-- Save Highlighted Snapshots -->
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Bewegungs-Snapshots mit Detail-Fokus</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Speichert Foto mit markiertem bewegten Bereich</p>
+          </div>
+          <input id="set-save-snapshots" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+      </div>
+
+      <!-- 2. ALARM & BENACHRICHTIGUNGEN -->
+      <div class="rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-5 flex flex-col gap-4 shadow-sm">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Alarm &amp; Benachrichtigungen</h3>
+
+        <div>
+          <p class="font-semibold text-sm mb-2">Alarm-Modus</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-alert-mode="0" class="alert-mode-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Ton &amp; Anzeige</button>
+            <button type="button" data-alert-mode="1" class="alert-mode-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Nur Anzeige</button>
+            <button type="button" data-alert-mode="2" class="alert-mode-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Nur Ton</button>
+          </div>
+        </div>
+
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Vibration bei Bewegung</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Haptisches Feedback auf Smartphones</p>
+          </div>
+          <input id="set-vibration" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <div>
+          <p class="font-semibold text-sm mb-2">Alarmton auswählen</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-alarm-tone="0" class="alarm-tone-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Sirene</button>
+            <button type="button" data-alarm-tone="1" class="alarm-tone-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Signalton</button>
+            <button type="button" data-alarm-tone="2" class="alarm-tone-btn py-2 px-2 rounded-xl text-xs font-semibold border transition">Hochalarm</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-semibold text-sm">Alarmlautstärke</span>
+            <span id="val-volume" class="text-sm font-bold text-blue-600 dark:text-blue-400">85%</span>
+          </div>
+          <input id="set-volume" type="range" min="0" max="100" value="85" />
+        </div>
+
+        <button id="test-alarm-btn" type="button"
+          class="w-full py-3 px-4 rounded-2xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-semibold text-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          Alarmton vorab testen
+        </button>
+      </div>
+
+      <!-- 3. KAMERA & LEISTUNG -->
+      <div class="rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-5 flex flex-col gap-4 shadow-sm">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Kamera &amp; Leistung</h3>
+
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Frontkamera verwenden</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Deaktiviert = Rückkamera (Hauptkamera)</p>
+          </div>
+          <input id="set-front-camera" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Kamerabild horizontal spiegeln</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Spiegelt Live-Vorschau und Snapshots</p>
+          </div>
+          <input id="set-mirror-image" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-semibold text-sm">Taschenlampe / LED-Licht</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Sofern von Rückkamera &amp; Browser unterstützt</p>
+          </div>
+          <input id="set-flashlight" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <div>
+          <p class="font-semibold text-sm mb-2">Analyseleistung (Bildrate)</p>
+          <div class="grid grid-cols-4 gap-2">
+            <button type="button" data-fps="5" class="fps-btn py-2 px-1.5 rounded-xl text-xs font-semibold border transition">Eco (5)</button>
+            <button type="button" data-fps="10" class="fps-btn py-2 px-1.5 rounded-xl text-xs font-semibold border transition">Mittel (10)</button>
+            <button type="button" data-fps="20" class="fps-btn py-2 px-1.5 rounded-xl text-xs font-semibold border transition">Hoch (20)</button>
+            <button type="button" data-fps="30" class="fps-btn py-2 px-1.5 rounded-xl text-xs font-semibold border transition">Max (30)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. ALLGEMEIN & DATENSCHUTZ -->
+      <div class="rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-5 flex flex-col gap-3 shadow-sm">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Allgemein</h3>
+
+        <label class="flex items-center justify-between cursor-pointer py-1">
+          <div>
+            <p class="font-semibold text-sm">Dark Mode</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Dunkles Design für geringeren Akkuverbrauch</p>
+          </div>
+          <input id="set-dark-mode" type="checkbox" class="w-5 h-5 accent-blue-600 rounded" />
+        </label>
+
+        <div class="h-px bg-m3-lightBorder dark:bg-m3-darkBorder"></div>
+
+        <button id="open-privacy-btn" type="button"
+          class="w-full py-3 px-4 rounded-2xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 border border-m3-lightBorder dark:border-m3-darkBorder text-sm font-semibold text-left flex items-center justify-between transition">
+          <span>Datenschutzinformationen</span>
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <button id="open-about-btn" type="button"
+          class="w-full py-3 px-4 rounded-2xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 border border-m3-lightBorder dark:border-m3-darkBorder text-sm font-semibold text-left flex items-center justify-between transition">
+          <span>Informationen zur App</span>
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <button id="reset-settings-btn" type="button"
+          class="mt-2 w-full py-3.5 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Alle Einstellungen zurücksetzen
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- SNAPSHOT LIGHTBOX MODAL (Vollbildansicht + Detail-Zoom + Download) -->
+  <div id="snapshot-lightbox" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder overflow-hidden shadow-2xl flex flex-col">
+      <div class="px-5 py-3.5 border-b border-m3-lightBorder dark:border-m3-darkBorder flex items-center justify-between">
+        <div>
+          <h3 id="lightbox-title" class="text-base font-bold">Bewegungsaufnahme</h3>
+          <p id="lightbox-subtitle" class="text-xs text-slate-500 dark:text-slate-400">--</p>
+        </div>
+        <button id="lightbox-close-btn" type="button" aria-label="Schließen"
+          class="p-2 rounded-xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="bg-slate-950 flex items-center justify-center p-2 max-h-[68vh] overflow-auto">
+        <img id="lightbox-image" alt="Bewegungsdetail" class="max-w-full max-h-[64vh] rounded-2xl object-contain border border-white/10" />
+      </div>
+      <div class="p-4 flex items-center justify-between gap-3 bg-m3-lightSurface dark:bg-m3-darkSurface">
+        <span id="lightbox-badge" class="text-xs font-semibold text-red-600 dark:text-red-400">Hervorgehobenes Detail</span>
+        <div class="flex items-center gap-2">
+          <button id="lightbox-download-btn" type="button"
+            class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Bild speichern (JPG)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM MODAL DIALOG (XSS-Safe DOM Content) -->
+  <div id="custom-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-3xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-6 shadow-2xl">
+      <h3 id="modal-title" class="text-lg font-bold mb-2">Hinweis</h3>
+      <div id="modal-body" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-2 mb-6"></div>
+      <div id="modal-actions" class="flex justify-end gap-2"></div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-box" class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 translate-y-4">
+    <div id="toast-text" class="px-4 py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-semibold shadow-xl border border-white/10"></div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    (() => {
+      'use strict';
+
+      // =========================================================================
+      // 1. PERSISTENTE EINSTELLUNGEN (localStorage) & INDEXEDDB PROTOKOLL-SPEICHER
+      // =========================================================================
+      const STORAGE_SETTINGS_KEY = 'motion_guard_settings_v2';
+      const DB_NAME = 'MotionGuardDB';
+      const DB_VERSION = 1;
+      const STORE_LOGS = 'motion_logs';
+      const MAX_STORED_LOGS = 200;
+
+      const DEFAULT_SETTINGS = {
+        motionEnabled: true,
+        sensitivity: 60,        // 1..100
+        noiseFilter: true,      // 3x3 Box-Blur vor Differenzbildung
+        minDuration: 300,       // ms (0..2000)
+        detectionDelay: 2,      // Sekunden (0..10)
+        cooldown: 3,            // Sekunden (1..15)
+        centerZoneOnly: false,
+        showHeatmap: true,
+        saveSnapshots: true,
+        alertMode: 0,           // 0: Ton & Anzeige, 1: Nur Anzeige, 2: Nur Ton
+        vibrationEnabled: true,
+        alarmTone: 0,           // 0: Sirene, 1: Signalton, 2: Hochalarm
+        alarmVolume: 85,        // 0..100
+        useFrontCamera: false,
+        mirrorImage: false,
+        flashlightEnabled: false,
+        analysisFps: 10,        // 5, 10, 20, 30
+        darkMode: true
+      };
+
+      let settings = loadSettings();
+      let logs = [];
+      let dbInstance = null;
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem(STORAGE_SETTINGS_KEY);
+          if (!raw) return { ...DEFAULT_SETTINGS };
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return { ...DEFAULT_SETTINGS };
+          }
+
+          const merged = { ...DEFAULT_SETTINGS, ...parsed };
+          const clamp = (value, min, max, fallback) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+          };
+          const bool = (value, fallback) => typeof value === 'boolean' ? value : fallback;
+
+          merged.motionEnabled = bool(merged.motionEnabled, DEFAULT_SETTINGS.motionEnabled);
+          merged.noiseFilter = bool(merged.noiseFilter, DEFAULT_SETTINGS.noiseFilter);
+          merged.centerZoneOnly = bool(merged.centerZoneOnly, DEFAULT_SETTINGS.centerZoneOnly);
+          merged.showHeatmap = bool(merged.showHeatmap, DEFAULT_SETTINGS.showHeatmap);
+          merged.saveSnapshots = bool(merged.saveSnapshots, DEFAULT_SETTINGS.saveSnapshots);
+          merged.vibrationEnabled = bool(merged.vibrationEnabled, DEFAULT_SETTINGS.vibrationEnabled);
+          merged.useFrontCamera = bool(merged.useFrontCamera, DEFAULT_SETTINGS.useFrontCamera);
+          merged.mirrorImage = bool(merged.mirrorImage, DEFAULT_SETTINGS.mirrorImage);
+          merged.flashlightEnabled = bool(merged.flashlightEnabled, DEFAULT_SETTINGS.flashlightEnabled);
+          merged.darkMode = bool(merged.darkMode, DEFAULT_SETTINGS.darkMode);
+          merged.sensitivity = clamp(merged.sensitivity, 1, 100, DEFAULT_SETTINGS.sensitivity);
+          merged.minDuration = clamp(merged.minDuration, 0, 2000, DEFAULT_SETTINGS.minDuration);
+          merged.detectionDelay = clamp(merged.detectionDelay, 0, 10, DEFAULT_SETTINGS.detectionDelay);
+          merged.cooldown = clamp(merged.cooldown, 1, 15, DEFAULT_SETTINGS.cooldown);
+          merged.alertMode = clamp(merged.alertMode, 0, 2, DEFAULT_SETTINGS.alertMode);
+          merged.alarmTone = clamp(merged.alarmTone, 0, 2, DEFAULT_SETTINGS.alarmTone);
+          merged.alarmVolume = clamp(merged.alarmVolume, 0, 100, DEFAULT_SETTINGS.alarmVolume);
+          merged.analysisFps = [5, 10, 20, 30].includes(Number(merged.analysisFps))
+            ? Number(merged.analysisFps) : DEFAULT_SETTINGS.analysisFps;
+
+          if (merged.useFrontCamera) merged.flashlightEnabled = false;
+          return merged;
+        } catch {
+          return { ...DEFAULT_SETTINGS };
+        }
+      }
+
+      function saveSettings() {
+        try {
+          localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+        } catch (e) {
+          console.warn('Einstellungen konnten nicht gespeichert werden:', e);
+        }
+      }
+
+      // IndexedDB Helper with graceful In-Memory Fallback (e.g. strict Private Browsing)
+      function openLogsDatabase() {
+        return new Promise((resolve) => {
+          if (!('indexedDB' in window)) {
+            resolve(null);
+            return;
+          }
+          try {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = (event) => {
+              const db = event.target.result;
+              if (!db.objectStoreNames.contains(STORE_LOGS)) {
+                db.createObjectStore(STORE_LOGS, { keyPath: 'id' });
+              }
+            };
+            req.onsuccess = (event) => {
+              dbInstance = event.target.result;
+              resolve(dbInstance);
+            };
+            req.onerror = () => resolve(null);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+
+      async function loadAllLogsFromDB() {
+        await openLogsDatabase();
+        if (!dbInstance) {
+          updateLogBadges();
+          return;
+        }
+        return new Promise((resolve) => {
+          try {
+            const tx = dbInstance.transaction(STORE_LOGS, 'readonly');
+            const store = tx.objectStore(STORE_LOGS);
+            const req = store.getAll();
+            req.onsuccess = () => {
+              const items = Array.isArray(req.result) ? req.result : [];
+              items.sort((a, b) => b.timestamp - a.timestamp);
+              logs = items;
+              updateLogBadges();
+              if (logs.length > 0 && logs[0].snapshotDataUrl) {
+                updateLastCaptureCard(logs[0]);
+              }
+              resolve();
+            };
+            req.onerror = () => resolve();
+          } catch {
+            resolve();
+          }
+        });
+      }
+
+      async function insertLogEntry(entry) {
+        logs.unshift(entry);
+        let removedIds = [];
+        if (logs.length > MAX_STORED_LOGS) {
+          const removed = logs.splice(MAX_STORED_LOGS);
+          removedIds = removed.map(r => r.id);
+        }
+        updateLogBadges();
+        if (entry.snapshotDataUrl) {
+          updateLastCaptureCard(entry);
+        }
+
+        if (!dbInstance) return;
+        try {
+          const tx = dbInstance.transaction(STORE_LOGS, 'readwrite');
+          const store = tx.objectStore(STORE_LOGS);
+          store.put(entry);
+          removedIds.forEach(id => store.delete(id));
+        } catch (e) {
+          console.warn('IndexedDB Schreibfehler:', e);
+        }
+      }
+
+      async function deleteLogEntry(id) {
+        logs = logs.filter(item => item.id !== id);
+        updateLogBadges();
+        if (logs.length > 0 && logs[0].snapshotDataUrl) {
+          updateLastCaptureCard(logs[0]);
+        } else {
+          els.lastCaptureCard.classList.add('hidden');
+        }
+
+        if (!dbInstance) return;
+        try {
+          const tx = dbInstance.transaction(STORE_LOGS, 'readwrite');
+          tx.objectStore(STORE_LOGS).delete(id);
+        } catch {}
+      }
+
+      async function clearAllLogsFromDB() {
+        logs = [];
+        updateLogBadges();
+        els.lastCaptureCard.classList.add('hidden');
+
+        if (!dbInstance) return;
+        try {
+          const tx = dbInstance.transaction(STORE_LOGS, 'readwrite');
+          tx.objectStore(STORE_LOGS).clear();
+        } catch {}
+      }
+
+      // =========================================================================
+      // 2. DOM-REFERENZEN
+      // =========================================================================
+      const els = {
+        viewMain: document.getElementById('view-main'),
+        viewLogs: document.getElementById('view-logs'),
+        viewSettings: document.getElementById('view-settings'),
+
+        navLogsBtn: document.getElementById('nav-logs-btn'),
+        navSettingsBtn: document.getElementById('nav-settings-btn'),
+        logsBackBtn: document.getElementById('logs-back-btn'),
+        settingsBackBtn: document.getElementById('settings-back-btn'),
+        quickLogsLink: document.getElementById('quick-logs-link'),
+
+        logBadge: document.getElementById('log-badge'),
+        quickLogCount: document.getElementById('quick-log-count'),
+        logsTotalCount: document.getElementById('logs-total-count'),
+        logsListContainer: document.getElementById('logs-list-container'),
+        exportLogsBtn: document.getElementById('export-logs-btn'),
+        clearAllLogsBtn: document.getElementById('clear-all-logs-btn'),
+
+        cameraWrapper: document.getElementById('camera-wrapper'),
+        video: document.getElementById('camera-video'),
+        overlayCanvas: document.getElementById('overlay-canvas'),
+        analysisCanvas: document.getElementById('analysis-canvas'),
+        snapshotCanvas: document.getElementById('snapshot-canvas'),
+        cameraPlaceholder: document.getElementById('camera-placeholder'),
+        centerZoneBox: document.getElementById('center-zone-box'),
+        liveTopControls: document.getElementById('live-top-controls'),
+        wakelockBadge: document.getElementById('wakelock-badge'),
+        fpsBadge: document.getElementById('fps-badge'),
+        quickTorchBtn: document.getElementById('quick-torch-btn'),
+        quickFlipBtn: document.getElementById('quick-flip-btn'),
+
+        armingBanner: document.getElementById('arming-banner'),
+        armingCountdownText: document.getElementById('arming-countdown-text'),
+        motionAlertBanner: document.getElementById('motion-alert-banner'),
+        alertSnapshotThumb: document.getElementById('alert-snapshot-thumb'),
+        alertFallbackIcon: document.getElementById('alert-fallback-icon'),
+        motionAlertSubtext: document.getElementById('motion-alert-subtext'),
+        motionIntensityPill: document.getElementById('motion-intensity-pill'),
+
+        lastCaptureCard: document.getElementById('last-capture-card'),
+        lastCaptureImgWrap: document.getElementById('last-capture-img-wrap'),
+        lastCaptureImg: document.getElementById('last-capture-img'),
+        lastCaptureMeta: document.getElementById('last-capture-meta'),
+        lastCaptureDetail: document.getElementById('last-capture-detail'),
+        lastCaptureOpenBtn: document.getElementById('last-capture-open-btn'),
+
+        liveMeterBar: document.getElementById('live-meter-bar'),
+        liveActivityValue: document.getElementById('live-activity-value'),
+        liveActivityFill: document.getElementById('live-activity-fill'),
+
+        statusDot: document.getElementById('status-dot'),
+        statusText: document.getElementById('status-text'),
+        quickSensLabel: document.getElementById('quick-sens-label'),
+        toggleMonitoringBtn: document.getElementById('toggle-monitoring-btn'),
+        toggleBtnIcon: document.getElementById('toggle-btn-icon'),
+        toggleBtnText: document.getElementById('toggle-btn-text'),
+
+        // Settings Inputs
+        setMotionEnabled: document.getElementById('set-motion-enabled'),
+        setSensitivity: document.getElementById('set-sensitivity'),
+        valSensitivity: document.getElementById('val-sensitivity'),
+        setNoiseFilter: document.getElementById('set-noise-filter'),
+        setMinDuration: document.getElementById('set-min-duration'),
+        valMinDuration: document.getElementById('val-min-duration'),
+        setDetectionDelay: document.getElementById('set-detection-delay'),
+        valDetectionDelay: document.getElementById('val-detection-delay'),
+        setCooldown: document.getElementById('set-cooldown'),
+        valCooldown: document.getElementById('val-cooldown'),
+        setCenterZone: document.getElementById('set-center-zone'),
+        setShowHeatmap: document.getElementById('set-show-heatmap'),
+        setSaveSnapshots: document.getElementById('set-save-snapshots'),
+        setVibration: document.getElementById('set-vibration'),
+        setVolume: document.getElementById('set-volume'),
+        valVolume: document.getElementById('val-volume'),
+        testAlarmBtn: document.getElementById('test-alarm-btn'),
+        setFrontCamera: document.getElementById('set-front-camera'),
+        setMirrorImage: document.getElementById('set-mirror-image'),
+        setFlashlight: document.getElementById('set-flashlight'),
+        setDarkMode: document.getElementById('set-dark-mode'),
+        openPrivacyBtn: document.getElementById('open-privacy-btn'),
+        openAboutBtn: document.getElementById('open-about-btn'),
+        resetSettingsBtn: document.getElementById('reset-settings-btn'),
+
+        // Lightbox
+        snapshotLightbox: document.getElementById('snapshot-lightbox'),
+        lightboxTitle: document.getElementById('lightbox-title'),
+        lightboxSubtitle: document.getElementById('lightbox-subtitle'),
+        lightboxImage: document.getElementById('lightbox-image'),
+        lightboxBadge: document.getElementById('lightbox-badge'),
+        lightboxCloseBtn: document.getElementById('lightbox-close-btn'),
+        lightboxDownloadBtn: document.getElementById('lightbox-download-btn'),
+
+        // Modal & Toast
+        modal: document.getElementById('custom-modal'),
+        modalTitle: document.getElementById('modal-title'),
+        modalBody: document.getElementById('modal-body'),
+        modalActions: document.getElementById('modal-actions'),
+        toastBox: document.getElementById('toast-box'),
+        toastText: document.getElementById('toast-text')
+      };
+
+      // =========================================================================
+      // 3. UI-HILFSFUNKTIONEN (XSS-SICHERES MODAL, LIGHTBOX, TOAST, THEME)
+      // =========================================================================
+      let toastTimer = null;
+      function showToast(message) {
+        els.toastText.textContent = message;
+        els.toastBox.classList.remove('opacity-0', 'translate-y-4');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          els.toastBox.classList.add('opacity-0', 'translate-y-4');
+        }, 2600);
+      }
+
+      // Safe Modal builder using DOM nodes instead of raw innerHTML
+      function showModal({ title, paragraphs, buttons }) {
+        els.modalTitle.textContent = title;
+        els.modalBody.replaceChildren();
+        paragraphs.forEach(item => {
+          const p = document.createElement('p');
+          if (typeof item === 'string') {
+            p.textContent = item;
+          } else {
+            const strong = document.createElement('strong');
+            strong.textContent = item.label + ' ';
+            p.appendChild(strong);
+            p.appendChild(document.createTextNode(item.text));
+          }
+          els.modalBody.appendChild(p);
+        });
+
+        els.modalActions.replaceChildren();
+        buttons.forEach(btn => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = btn.label;
+          b.className = btn.primary
+            ? 'px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition'
+            : btn.danger
+              ? 'px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition'
+              : 'px-4 py-2 rounded-xl bg-m3-lightCard dark:bg-m3-darkCard hover:bg-slate-200 dark:hover:bg-slate-800 text-sm font-semibold transition';
+          b.addEventListener('click', () => {
+            closeModal();
+            if (btn.onClick) btn.onClick();
+          });
+          els.modalActions.appendChild(b);
+        });
+        els.modal.classList.remove('hidden');
+      }
+
+      function closeModal() {
+        els.modal.classList.add('hidden');
+      }
+
+      let activeLightboxEntry = null;
+      function openSnapshotLightbox(entry) {
+        if (!entry || !entry.snapshotDataUrl) return;
+        activeLightboxEntry = entry;
+        els.lightboxTitle.textContent = entry.description;
+        els.lightboxSubtitle.textContent = `${entry.date} • ${entry.time} Uhr • Intensität: ${entry.intensity}%`;
+        els.lightboxImage.src = entry.snapshotDataUrl;
+        els.lightboxBadge.textContent = entry.regionLabel || 'Bewegtes Detail hervorgehoben';
+        els.snapshotLightbox.classList.remove('hidden');
+      }
+
+      function closeSnapshotLightbox() {
+        els.snapshotLightbox.classList.add('hidden');
+        activeLightboxEntry = null;
+      }
+
+      function downloadSnapshotPng(entry) {
+        if (!entry || !entry.snapshotDataUrl) return;
+        const link = document.createElement('a');
+        const safeDate = entry.date.replace(/\./g, '-');
+        const safeTime = entry.time.replace(/:/g, '-');
+        link.href = entry.snapshotDataUrl;
+        link.download = `MotionGuard_${safeDate}_${safeTime}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Bewegungsbild als JPG gespeichert');
+      }
+
+      function switchView(target) {
+        els.viewMain.classList.add('hidden');
+        els.viewLogs.classList.add('hidden');
+        els.viewSettings.classList.add('hidden');
+
+        if (target === 'logs') {
+          renderLogsList();
+          els.viewLogs.classList.remove('hidden');
+        } else if (target === 'settings') {
+          syncSettingsUI();
+          els.viewSettings.classList.remove('hidden');
+        } else {
+          els.viewMain.classList.remove('hidden');
+        }
+      }
+
+      function applyTheme() {
+        if (settings.darkMode) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+
+      // =========================================================================
+      // 4. WEB AUDIO API ALARMGENERATOR & VIBRATION
+      // =========================================================================
+      let audioCtx = null;
+
+      function getAudioContext() {
+        try {
+          if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) audioCtx = new AudioContextClass();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+        } catch (error) {
+          console.warn('Audioausgabe ist in diesem Browser nicht verfügbar:', error);
+          audioCtx = null;
+        }
+        return audioCtx;
+      }
+
+      function playAlarmSound(toneIndex, volumePercent) {
+        const vol = Math.max(0, Math.min(1, volumePercent / 100));
+        if (vol === 0) return;
+
+        const ctx = getAudioContext();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const gainNode = ctx.createGain();
+        gainNode.connect(ctx.destination);
+
+        if (toneIndex === 0) {
+          // Sirene
+          const osc = ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(660, now);
+          osc.frequency.linearRampToValueAtTime(980, now + 0.25);
+          osc.frequency.linearRampToValueAtTime(660, now + 0.5);
+          osc.frequency.linearRampToValueAtTime(980, now + 0.75);
+
+          gainNode.gain.setValueAtTime(vol * 0.45, now);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+          osc.connect(gainNode);
+          osc.start(now);
+          osc.stop(now + 0.8);
+        } else if (toneIndex === 1) {
+          // Signalton
+          [0, 0.22].forEach(offset => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, now + offset);
+            g.gain.setValueAtTime(vol * 0.6, now + offset);
+            g.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.15);
+            osc.connect(g);
+            g.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.16);
+          });
+        } else {
+          // Hochalarm
+          for (let i = 0; i < 4; i++) {
+            const offset = i * 0.14;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1550, now + offset);
+            g.gain.setValueAtTime(vol * 0.35, now + offset);
+            g.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.1);
+            osc.connect(g);
+            g.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.11);
+          }
+        }
+      }
+
+      function triggerVibration() {
+        if ('vibrate' in navigator) {
+          try {
+            navigator.vibrate([250, 100, 250]);
+          } catch {}
+        }
+      }
+
+      // =========================================================================
+      // 5. KAMERA, WAKE LOCK, RAUSCHFILTER & OBJEKT-HERVORHEBUNG
+      // =========================================================================
+      let isMonitoring = false;
+      let isStartingCamera = false; // Guard against race conditions on rapid clicks
+      let mediaStream = null;
+      let videoTrack = null;
+      let wakeLockSentinel = null;
+      let analysisTimerId = null;
+      let armingIntervalId = null;
+      let alertBannerTimeoutId = null;
+      let latestCaptureEntry = null;
+
+      let armTimestamp = 0;
+      let previousLumaFrame = null;
+      let motionStartTime = 0;
+      let lastAlarmTime = 0;
+
+      const ANALYSIS_WIDTH = 160;
+      const ANALYSIS_HEIGHT = 120;
+      els.analysisCanvas.width = ANALYSIS_WIDTH;
+      els.analysisCanvas.height = ANALYSIS_HEIGHT;
+      const analysisCtx = els.analysisCanvas.getContext('2d', { willReadFrequently: true });
+      const overlayCtx = els.overlayCanvas.getContext('2d');
+      const snapshotCtx = els.snapshotCanvas.getContext('2d');
+
+      async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+          try {
+            wakeLockSentinel = await navigator.wakeLock.request('screen');
+            els.wakelockBadge.classList.remove('hidden');
+            wakeLockSentinel.addEventListener('release', () => {
+              els.wakelockBadge.classList.add('hidden');
+            });
+          } catch {
+            els.wakelockBadge.classList.add('hidden');
+          }
+        }
+      }
+
+      async function releaseWakeLock() {
+        if (wakeLockSentinel) {
+          try {
+            await wakeLockSentinel.release();
+          } catch {}
+          wakeLockSentinel = null;
+        }
+        els.wakelockBadge.classList.add('hidden');
+      }
+
+      async function applyCameraConstraints() {
+        const scaleX = settings.mirrorImage ? '-1' : '1';
+        els.video.style.transform = `scaleX(${scaleX})`;
+        // Note: Overlay canvas handles mirroring internally when drawing bounding box text properly
+        els.overlayCanvas.style.transform = 'scaleX(1)';
+
+        if (isMonitoring && settings.centerZoneOnly) {
+          els.centerZoneBox.classList.remove('hidden');
+        } else {
+          els.centerZoneBox.classList.add('hidden');
+        }
+
+        if (isMonitoring && settings.showHeatmap) {
+          els.overlayCanvas.classList.remove('hidden');
+        } else {
+          els.overlayCanvas.classList.add('hidden');
+        }
+
+        els.fpsBadge.textContent = `${settings.analysisFps} FPS`;
+
+        if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+          try {
+            const caps = videoTrack.getCapabilities();
+            if (caps && caps.torch && !settings.useFrontCamera) {
+              await videoTrack.applyConstraints({
+                advanced: [{ torch: settings.flashlightEnabled }]
+              });
+            }
+          } catch (e) {
+            console.warn('Taschenlampe wird von diesem Gerät/Browser nicht unterstützt:', e);
+          }
+        }
+      }
+
+      async function acquireCameraStream() {
+        if (!window.isSecureContext) {
+          const error = new Error('Kamerazugriff ist nur in einem sicheren Kontext möglich. Öffne diese App über HTTPS oder http://localhost statt direkt als lokale Datei (file://).');
+          error.name = 'InsecureContextError';
+          throw error;
+        }
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+          const error = new Error('Dieser Browser stellt getUserMedia nicht bereit. Verwende eine aktuelle Version von Chrome über HTTPS oder localhost.');
+          error.name = 'NotSupportedError';
+          throw error;
+        }
+
+        const preferredConstraints = {
+          audio: false,
+          video: {
+            facingMode: { ideal: settings.useFrontCamera ? 'user' : 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+
+        try {
+          return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+        } catch (err) {
+          // Retry only when a requested camera constraint cannot be met.
+          // Permission/security errors must not be hidden by a second request.
+          if (err && (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError')) {
+            return await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+          }
+          throw err;
+        }
+      }
+
+      function getCameraErrorHelp(err) {
+        const name = err && err.name ? err.name : 'UnknownError';
+        if (name === 'InsecureContextError' || !window.isSecureContext) {
+          return 'Chrome erlaubt Kamerazugriff nur in einem sicheren Kontext. Die HTML-Datei darf dafür nicht direkt über file:// geöffnet werden. Stelle sie über HTTPS bereit oder starte einen lokalen Webserver und öffne http://localhost. Danach die Kamera-Berechtigung in Chrome erlauben.';
+        }
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+          return 'Der Kamerazugriff wurde vom Browser oder Betriebssystem verweigert. Prüfe in Chrome unter Website-Einstellungen → Kamera, ob der Zugriff erlaubt ist. Prüfe außerdem die Android-App-Berechtigung für Chrome und schließe andere Apps, die gerade die Kamera verwenden. Lade die Seite danach neu.';
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          return 'Es wurde keine verfügbare Kamera gefunden. Prüfe, ob eine Kamera vorhanden und nicht deaktiviert ist.';
+        }
+        if (name === 'NotReadableError' || name === 'TrackStartError') {
+          return 'Die Kamera ist vorhanden, kann aber nicht gestartet werden. Eine andere App verwendet sie möglicherweise bereits. Schließe diese App und versuche es erneut.';
+        }
+        if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+          return 'Die Kamera unterstützt die angeforderten Einstellungen nicht. Verwende eine andere Kamera oder prüfe die Geräteeinstellungen.';
+        }
+        return 'Die Kamera konnte nicht gestartet werden. Prüfe die Browser-Berechtigung, die Android-Kamera-Berechtigung und ob eine andere App die Kamera belegt.';
+      }
+
+      async function startMonitoring() {
+        if (isStartingCamera || isMonitoring) return;
+        isStartingCamera = true;
+        getAudioContext();
+
+        if (!window.isSecureContext || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+          isStartingCamera = false;
+          showModal({
+            title: 'Kamerazugriff nicht verfügbar',
+            paragraphs: [
+              getCameraErrorHelp({ name: window.isSecureContext ? 'NotSupportedError' : 'InsecureContextError' })
+            ],
+            buttons: [{ label: 'Schließen', primary: true }]
+          });
+          return;
+        }
+
+        try {
+          const stream = await acquireCameraStream();
+          mediaStream = stream;
+          videoTrack = stream.getVideoTracks()[0] || null;
+          if (!videoTrack) throw new Error('Der Kamerastream enthält keine Videospur.');
+          videoTrack.addEventListener('ended', () => {
+            if (isMonitoring && mediaStream === stream) {
+              stopMonitoring();
+              showToast('Kameraverbindung wurde beendet');
+            }
+          }, { once: true });
+          els.video.srcObject = stream;
+          await els.video.play();
+
+          isMonitoring = true;
+          isStartingCamera = false;
+          previousLumaFrame = null;
+          motionStartTime = 0;
+
+          els.cameraPlaceholder.classList.add('hidden');
+          els.video.classList.remove('hidden');
+          els.liveTopControls.classList.remove('hidden');
+          els.liveMeterBar.classList.remove('hidden');
+
+          els.toggleMonitoringBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-600/25');
+          els.toggleMonitoringBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'shadow-red-600/25');
+          els.toggleBtnIcon.innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2" />';
+          els.toggleBtnText.textContent = 'Überwachung stoppen';
+
+          await applyCameraConstraints();
+          await requestWakeLock();
+
+          const delayMs = settings.detectionDelay * 1000;
+          armTimestamp = Date.now() + delayMs;
+
+          clearInterval(armingIntervalId);
+          if (delayMs > 0) {
+            els.armingBanner.classList.remove('hidden');
+            updateStatusIndicator('arming');
+            armingIntervalId = setInterval(() => {
+              const remaining = armTimestamp - Date.now();
+              if (remaining <= 0) {
+                clearInterval(armingIntervalId);
+                els.armingBanner.classList.add('hidden');
+                if (isMonitoring) updateStatusIndicator('active');
+              } else {
+                els.armingCountdownText.textContent = `Aktiv in ${(remaining / 1000).toFixed(1)} Sek...`;
+              }
+            }, 100);
+          } else {
+            els.armingBanner.classList.add('hidden');
+            updateStatusIndicator('active');
+          }
+
+          startAnalysisLoop();
+        } catch (err) {
+          isStartingCamera = false;
+          console.error('Kamerafehler:', err);
+          stopMonitoring();
+          showModal({
+            title: 'Kamerazugriff fehlgeschlagen',
+            paragraphs: [
+              getCameraErrorHelp(err),
+              { label: 'Technischer Fehler:', text: `${err && err.name ? err.name : 'Unbekannt'}${err && err.message ? ' – ' + err.message : ''}` }
+            ],
+            buttons: [{ label: 'Verstanden', primary: true }]
+          });
+        }
+      }
+
+      function stopMonitoring() {
+        isMonitoring = false;
+        isStartingCamera = false;
+        clearInterval(analysisTimerId);
+        clearInterval(armingIntervalId);
+        clearTimeout(alertBannerTimeoutId);
+
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => {
+            try { track.stop(); } catch {}
+          });
+          mediaStream = null;
+          videoTrack = null;
+        }
+
+        els.video.srcObject = null;
+        els.video.classList.add('hidden');
+        if (overlayCtx) overlayCtx.clearRect(0, 0, els.overlayCanvas.width, els.overlayCanvas.height);
+        els.liveActivityValue.textContent = '0% / Schwelle 100%';
+        els.liveActivityFill.style.width = '0%';
+        previousLumaFrame = null;
+        motionStartTime = 0;
+        els.overlayCanvas.classList.add('hidden');
+        els.centerZoneBox.classList.add('hidden');
+        els.liveTopControls.classList.add('hidden');
+        els.liveMeterBar.classList.add('hidden');
+        els.armingBanner.classList.add('hidden');
+        els.motionAlertBanner.classList.add('hidden');
+        els.cameraWrapper.classList.remove('alarm-active-frame');
+        els.cameraPlaceholder.classList.remove('hidden');
+
+        els.toggleMonitoringBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'shadow-red-600/25');
+        els.toggleMonitoringBtn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-600/25');
+        els.toggleBtnIcon.innerHTML = '<path d="M8 5v14l11-7z" />';
+        els.toggleBtnText.textContent = 'Überwachung starten';
+
+        updateStatusIndicator('paused');
+        releaseWakeLock();
+      }
+
+      function updateStatusIndicator(state) {
+        els.statusDot.className = 'relative w-3 h-3 rounded-full inline-block';
+        if (state === 'active') {
+          els.statusDot.classList.add('bg-emerald-500', 'pulse-ring');
+          els.statusText.textContent = 'Überwachung aktiv';
+          els.statusText.className = 'font-bold text-base text-emerald-600 dark:text-emerald-400';
+        } else if (state === 'arming') {
+          els.statusDot.classList.add('bg-amber-500', 'pulse-ring');
+          els.statusText.textContent = 'Scharfschaltung...';
+          els.statusText.className = 'font-bold text-base text-amber-600 dark:text-amber-400';
+        } else {
+          els.statusDot.classList.add('bg-slate-400');
+          els.statusText.textContent = 'Überwachung pausiert';
+          els.statusText.className = 'font-bold text-base text-slate-600 dark:text-slate-300';
+        }
+      }
+
+      function startAnalysisLoop() {
+        clearInterval(analysisTimerId);
+        const intervalMs = Math.max(33, Math.round(1000 / settings.analysisFps));
+        analysisTimerId = setInterval(analyzeCurrentFrame, intervalMs);
+      }
+
+      // Fast 3x3 Box Blur for noise reduction on low-light camera sensors
+      function applyBoxBlur3x3(src, width, height) {
+        const dst = new Uint8Array(src.length);
+        for (let y = 0; y < height; y++) {
+          const yPrev = y > 0 ? y - 1 : y;
+          const yNext = y < height - 1 ? y + 1 : y;
+          const row0 = yPrev * width;
+          const row1 = y * width;
+          const row2 = yNext * width;
+          for (let x = 0; x < width; x++) {
+            const xPrev = x > 0 ? x - 1 : x;
+            const xNext = x < width - 1 ? x + 1 : x;
+            const sum =
+              src[row0 + xPrev] + src[row0 + x] + src[row0 + xNext] +
+              src[row1 + xPrev] + src[row1 + x] + src[row1 + xNext] +
+              src[row2 + xPrev] + src[row2 + x] + src[row2 + xNext];
+            dst[row1 + x] = (sum / 9) | 0;
+          }
+        }
+        return dst;
+      }
+
+      // Generates a high-res snapshot with the moving object/detail clearly highlighted
+      function captureHighlightedSnapshot(bbox, diffMask, dateStr, timeStr, intensityPercent) {
+        if (!settings.saveSnapshots || !els.video.videoWidth || !els.video.videoHeight) {
+          return null;
+        }
+
+        // Target max width 720px for crisp details while keeping storage fast & compact
+        const srcW = els.video.videoWidth;
+        const srcH = els.video.videoHeight;
+        const scale = Math.min(1, 720 / srcW);
+        const outW = Math.round(srcW * scale);
+        const outH = Math.round(srcH * scale);
+
+        els.snapshotCanvas.width = outW;
+        els.snapshotCanvas.height = outH;
+
+        snapshotCtx.save();
+        if (settings.mirrorImage) {
+          snapshotCtx.translate(outW, 0);
+          snapshotCtx.scale(-1, 1);
+        }
+        snapshotCtx.drawImage(els.video, 0, 0, outW, outH);
+        snapshotCtx.restore();
+
+        // Subtle dark vignette outside the moving region so the moving detail stands out clearly
+        if (bbox && bbox.valid) {
+          const normMinX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - bbox.maxX) : bbox.minX;
+          const normMaxX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - bbox.minX) : bbox.maxX;
+
+          const padX = Math.round(outW * 0.04);
+          const padY = Math.round(outH * 0.04);
+
+          const rx = Math.max(4, Math.floor((normMinX / ANALYSIS_WIDTH) * outW) - padX);
+          const ry = Math.max(4, Math.floor((bbox.minY / ANALYSIS_HEIGHT) * outH) - padY);
+          const rw = Math.min(outW - rx - 4, Math.ceil(((normMaxX - normMinX + 1) / ANALYSIS_WIDTH) * outW) + padX * 2);
+          const rh = Math.min(outH - ry - 4, Math.ceil(((bbox.maxY - bbox.minY + 1) / ANALYSIS_HEIGHT) * outH) + padY * 2);
+
+          // Dim surrounding area slightly (Spotlight effect on moving object)
+          snapshotCtx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          snapshotCtx.fillRect(0, 0, outW, ry); // Top
+          snapshotCtx.fillRect(0, ry + rh, outW, outH - (ry + rh)); // Bottom
+          snapshotCtx.fillRect(0, ry, rx, rh); // Left
+          snapshotCtx.fillRect(rx + rw, ry, outW - (rx + rw), rh); // Right
+
+          // Draw subtle pixel-change contour glow inside bounding box
+          const cellW = outW / ANALYSIS_WIDTH;
+          const cellH = outH / ANALYSIS_HEIGHT;
+          snapshotCtx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+          for (let y = bbox.minY; y <= bbox.maxY; y++) {
+            const rowOff = y * ANALYSIS_WIDTH;
+            for (let x = bbox.minX; x <= bbox.maxX; x++) {
+              if (diffMask[rowOff + x]) {
+                const drawX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - x) * cellW : x * cellW;
+                snapshotCtx.fillRect(drawX, y * cellH, cellW + 0.5, cellH + 0.5);
+              }
+            }
+          }
+
+          // Draw sharp red-amber highlight box + corner brackets around the moving detail
+          snapshotCtx.strokeStyle = '#EF4444';
+          snapshotCtx.lineWidth = Math.max(3, Math.round(outW / 220));
+          snapshotCtx.strokeRect(rx, ry, rw, rh);
+
+          // Corner accent brackets
+          const bracketLen = Math.min(22, Math.floor(Math.min(rw, rh) * 0.25));
+          snapshotCtx.strokeStyle = '#FACC15';
+          snapshotCtx.lineWidth = Math.max(4, Math.round(outW / 180));
+          snapshotCtx.beginPath();
+          // Top-left
+          snapshotCtx.moveTo(rx, ry + bracketLen); snapshotCtx.lineTo(rx, ry); snapshotCtx.lineTo(rx + bracketLen, ry);
+          // Top-right
+          snapshotCtx.moveTo(rx + rw - bracketLen, ry); snapshotCtx.lineTo(rx + rw, ry); snapshotCtx.lineTo(rx + rw, ry + bracketLen);
+          // Bottom-left
+          snapshotCtx.moveTo(rx, ry + rh - bracketLen); snapshotCtx.lineTo(rx, ry + rh); snapshotCtx.lineTo(rx + bracketLen, ry + rh);
+          // Bottom-right
+          snapshotCtx.moveTo(rx + rw - bracketLen, ry + rh); snapshotCtx.lineTo(rx + rw, ry + rh); snapshotCtx.lineTo(rx + rw, ry + rh - bracketLen);
+          snapshotCtx.stroke();
+
+          // Label tag directly above or inside the highlighted object box
+          const labelText = `Bewegtes Detail (${intensityPercent}%)`;
+          const fontSize = Math.max(12, Math.round(outW / 44));
+          snapshotCtx.font = `bold ${fontSize}px Inter, sans-serif`;
+          const textMetrics = snapshotCtx.measureText(labelText);
+          const tagW = textMetrics.width + 16;
+          const tagH = fontSize + 10;
+          const tagY = ry > tagH + 6 ? ry - tagH - 4 : ry + 4;
+          const tagX = Math.min(outW - tagW - 4, rx);
+
+          snapshotCtx.fillStyle = '#EF4444';
+          snapshotCtx.fillRect(tagX, tagY, tagW, tagH);
+          snapshotCtx.fillStyle = '#FFFFFF';
+          snapshotCtx.fillText(labelText, tagX + 8, tagY + fontSize + 2);
+        }
+
+        // Bottom timestamp watermark bar
+        const barH = Math.max(26, Math.round(outH / 16));
+        snapshotCtx.fillStyle = 'rgba(9, 13, 22, 0.78)';
+        snapshotCtx.fillRect(0, outH - barH, outW, barH);
+        const wmFont = Math.max(11, Math.round(barH * 0.52));
+        snapshotCtx.font = `600 ${wmFont}px Inter, sans-serif`;
+        snapshotCtx.fillStyle = '#F8FAFC';
+        snapshotCtx.fillText(`Motion Guard • ${dateStr} ${timeStr} Uhr`, 12, outH - Math.round(barH * 0.3));
+
+        return els.snapshotCanvas.toDataURL('image/jpeg', 0.86);
+      }
+
+      function describeMotionRegion(bbox) {
+        if (!bbox || !bbox.valid) return 'Gesamtes Sichtfeld';
+        const centerX = ((bbox.minX + bbox.maxX) / 2) / ANALYSIS_WIDTH;
+        const centerY = ((bbox.minY + bbox.maxY) / 2) / ANALYSIS_HEIGHT;
+        const effectiveX = settings.mirrorImage ? (1 - centerX) : centerX;
+
+        const horiz = effectiveX < 0.36 ? 'Links' : effectiveX > 0.64 ? 'Rechts' : 'Mitte';
+        const vert = centerY < 0.36 ? 'Oben' : centerY > 0.64 ? 'Unten' : 'Zentrum';
+        return horiz === 'Mitte' && vert === 'Zentrum' ? 'Bildmitte' : `${vert} • ${horiz}`;
+      }
+
+      function analyzeCurrentFrame() {
+        if (!isMonitoring || els.video.readyState < 2) return;
+
+        const now = Date.now();
+        if (!settings.motionEnabled || now < armTimestamp) {
+          previousLumaFrame = null;
+          motionStartTime = 0;
+          return;
+        }
+
+        analysisCtx.drawImage(els.video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+        const frameData = analysisCtx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT).data;
+
+        const pixelCount = ANALYSIS_WIDTH * ANALYSIS_HEIGHT;
+        let currentLuma = new Uint8Array(pixelCount);
+
+        for (let i = 0, p = 0; i < frameData.length; i += 4, p++) {
+          currentLuma[p] = (frameData[i] * 77 + frameData[i + 1] * 150 + frameData[i + 2] * 29) >> 8;
+        }
+
+        if (settings.noiseFilter) {
+          currentLuma = applyBoxBlur3x3(currentLuma, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+        }
+
+        if (previousLumaFrame) {
+          const lumaThreshold = Math.max(8, Math.min(60, Math.round(58 - settings.sensitivity * 0.48)));
+          const requiredRatio = Math.max(0.012, Math.min(0.15, 0.13 - settings.sensitivity * 0.00115));
+
+          const startX = settings.centerZoneOnly ? Math.floor(ANALYSIS_WIDTH * 0.25) : 0;
+          const endX = settings.centerZoneOnly ? Math.floor(ANALYSIS_WIDTH * 0.75) : ANALYSIS_WIDTH;
+          const startY = settings.centerZoneOnly ? Math.floor(ANALYSIS_HEIGHT * 0.25) : 0;
+          const endY = settings.centerZoneOnly ? Math.floor(ANALYSIS_HEIGHT * 0.75) : ANALYSIS_HEIGHT;
+
+          let diffCount = 0;
+          let sampledCount = 0;
+          const diffMask = new Uint8Array(pixelCount);
+
+          const bbox = {
+            valid: false,
+            minX: ANALYSIS_WIDTH,
+            minY: ANALYSIS_HEIGHT,
+            maxX: 0,
+            maxY: 0
+          };
+
+          for (let y = startY; y < endY; y++) {
+            const rowOffset = y * ANALYSIS_WIDTH;
+            for (let x = startX; x < endX; x++) {
+              const idx = rowOffset + x;
+              sampledCount++;
+              const delta = Math.abs(currentLuma[idx] - previousLumaFrame[idx]);
+              if (delta > lumaThreshold) {
+                diffCount++;
+                diffMask[idx] = 1;
+                bbox.valid = true;
+                if (x < bbox.minX) bbox.minX = x;
+                if (x > bbox.maxX) bbox.maxX = x;
+                if (y < bbox.minY) bbox.minY = y;
+                if (y > bbox.maxY) bbox.maxY = y;
+              }
+            }
+          }
+
+          const ratio = sampledCount > 0 ? diffCount / sampledCount : 0;
+          const relativeActivity = Math.min(100, Math.round((ratio / requiredRatio) * 100));
+
+          els.liveActivityValue.textContent = `${relativeActivity}% / Schwelle 100%`;
+          els.liveActivityFill.style.width = `${relativeActivity}%`;
+
+          // Render Live Heatmap + Live Tracking Bounding Box on Overlay Canvas
+          if (settings.showHeatmap) {
+            if (els.overlayCanvas.width !== ANALYSIS_WIDTH || els.overlayCanvas.height !== ANALYSIS_HEIGHT) {
+              els.overlayCanvas.width = ANALYSIS_WIDTH;
+              els.overlayCanvas.height = ANALYSIS_HEIGHT;
+            }
+            overlayCtx.clearRect(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+            if (diffCount > 0) {
+              const overlayImg = overlayCtx.createImageData(ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+              for (let y = startY; y < endY; y++) {
+                const rowOff = y * ANALYSIS_WIDTH;
+                for (let x = startX; x < endX; x++) {
+                  const srcIdx = rowOff + x;
+                  if (diffMask[srcIdx]) {
+                    const drawX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - x) : x;
+                    const oIdx = (rowOff + drawX) * 4;
+                    overlayImg.data[oIdx] = 239;
+                    overlayImg.data[oIdx + 1] = 68;
+                    overlayImg.data[oIdx + 2] = 68;
+                    overlayImg.data[oIdx + 3] = 135;
+                  }
+                }
+              }
+              overlayCtx.putImageData(overlayImg, 0, 0);
+
+              // Draw Live Object Tracking Rectangle if threshold is approached
+              if (bbox.valid && relativeActivity >= 45) {
+                const drawMinX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - bbox.maxX) : bbox.minX;
+                const drawMaxX = settings.mirrorImage ? (ANALYSIS_WIDTH - 1 - bbox.minX) : bbox.maxX;
+                overlayCtx.strokeStyle = relativeActivity >= 100 ? '#FACC15' : 'rgba(56, 189, 248, 0.85)';
+                overlayCtx.lineWidth = 1.5;
+                overlayCtx.strokeRect(
+                  Math.max(0, drawMinX - 2),
+                  Math.max(0, bbox.minY - 2),
+                  Math.min(ANALYSIS_WIDTH, drawMaxX - drawMinX + 5),
+                  Math.min(ANALYSIS_HEIGHT, bbox.maxY - bbox.minY + 5)
+                );
+              }
+            }
+          }
+
+          if (ratio >= requiredRatio) {
+            if (motionStartTime === 0) {
+              motionStartTime = now;
+            }
+            const sustainedDuration = now - motionStartTime;
+            const cooldownMs = settings.cooldown * 1000;
+
+            if (sustainedDuration >= settings.minDuration && (now - lastAlarmTime) >= cooldownMs) {
+              lastAlarmTime = now;
+              motionStartTime = 0;
+              const intensityPercent = Math.max(10, Math.min(100, Math.round((ratio / requiredRatio) * 38)));
+              handleMotionTriggered(intensityPercent, bbox, diffMask);
+            }
+          } else {
+            motionStartTime = 0;
+          }
+        }
+
+        previousLumaFrame = currentLuma;
+      }
+
+      function updateLastCaptureCard(entry) {
+        if (!entry || !entry.snapshotDataUrl) return;
+        latestCaptureEntry = entry;
+        els.lastCaptureImg.src = entry.snapshotDataUrl;
+        els.lastCaptureMeta.textContent = `${entry.date} • ${entry.time} Uhr (${entry.intensity}%)`;
+        els.lastCaptureDetail.textContent = `Position: ${entry.regionLabel || 'Erkannt'} • Tippen für Vollbild`;
+        els.lastCaptureCard.classList.remove('hidden');
+      }
+
+      async function handleMotionTriggered(intensityPercent, bbox, diffMask) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const regionLabel = describeMotionRegion(bbox);
+
+        // Capture high-resolution snapshot highlighting the moving detail
+        const snapshotDataUrl = captureHighlightedSnapshot(bbox, diffMask, dateStr, timeStr, intensityPercent);
+
+        const entry = {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: now.getTime(),
+          date: dateStr,
+          time: timeStr,
+          description: 'Bewegung erkannt!',
+          intensity: intensityPercent,
+          regionLabel,
+          snapshotDataUrl
+        };
+
+        // 1. Visual Alert Banner (if mode 0 or 1)
+        if (settings.alertMode === 0 || settings.alertMode === 1) {
+          els.motionAlertSubtext.textContent = `${regionLabel} • ${timeStr} Uhr`;
+          els.motionIntensityPill.textContent = `${intensityPercent}%`;
+
+          if (snapshotDataUrl) {
+            els.alertSnapshotThumb.src = snapshotDataUrl;
+            els.alertSnapshotThumb.classList.remove('hidden');
+            els.alertFallbackIcon.classList.add('hidden');
+            els.alertSnapshotThumb.onclick = () => openSnapshotLightbox(entry);
+          } else {
+            els.alertSnapshotThumb.classList.add('hidden');
+            els.alertFallbackIcon.classList.remove('hidden');
+          }
+
+          els.motionAlertBanner.classList.remove('hidden');
+          els.cameraWrapper.classList.add('alarm-active-frame');
+
+          clearTimeout(alertBannerTimeoutId);
+          alertBannerTimeoutId = setTimeout(() => {
+            els.motionAlertBanner.classList.add('hidden');
+            els.cameraWrapper.classList.remove('alarm-active-frame');
+          }, 3200);
+        }
+
+        // 2. Audible Alarm (if mode 0 or 2)
+        if (settings.alertMode === 0 || settings.alertMode === 2) {
+          playAlarmSound(settings.alarmTone, settings.alarmVolume);
+        }
+
+        // 3. Vibration
+        if (settings.vibrationEnabled) {
+          triggerVibration();
+        }
+
+        // 4. Persist to IndexedDB
+        await insertLogEntry(entry);
+      }
+
+      // =========================================================================
+      // 6. PROTOKOLL-RENDERING (XSS-SICHER) & CSV-EXPORT
+      // =========================================================================
+      function updateLogBadges() {
+        const count = logs.length;
+        els.quickLogCount.textContent = String(count);
+        els.logsTotalCount.textContent = String(count);
+        if (count > 0) {
+          els.logBadge.textContent = count > 99 ? '99+' : String(count);
+          els.logBadge.classList.remove('hidden');
+        } else {
+          els.logBadge.classList.add('hidden');
+        }
+      }
+
+      function renderLogsList() {
+        updateLogBadges();
+        els.logsListContainer.replaceChildren();
+
+        if (logs.length === 0) {
+          const emptyWrap = document.createElement('div');
+          emptyWrap.className = 'flex-1 flex flex-col items-center justify-center text-center py-16 px-4';
+
+          const title = document.createElement('p');
+          title.className = 'font-semibold text-base';
+          title.textContent = 'Keine Bewegungsereignisse';
+
+          const desc = document.createElement('p');
+          desc.className = 'text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs';
+          desc.textContent = 'Sobald während der Überwachung eine Bewegung erkannt wird, erscheint sie hier inklusive hervorgehobenem Foto.';
+
+          emptyWrap.appendChild(title);
+          emptyWrap.appendChild(desc);
+          els.logsListContainer.appendChild(emptyWrap);
+          return;
+        }
+
+        logs.forEach(entry => {
+          const card = document.createElement('div');
+          card.className = 'rounded-2xl bg-m3-lightSurface dark:bg-m3-darkSurface border border-m3-lightBorder dark:border-m3-darkBorder p-3.5 flex items-center justify-between gap-3 shadow-sm';
+
+          const leftGroup = document.createElement('div');
+          leftGroup.className = 'flex items-center gap-3 min-w-0 flex-1';
+
+          if (entry.snapshotDataUrl) {
+            const imgBtn = document.createElement('button');
+            imgBtn.type = 'button';
+            imgBtn.className = 'relative shrink-0 rounded-xl overflow-hidden border border-red-500/40 bg-slate-950 group';
+            imgBtn.title = 'Bewegungsdetail vergrößern';
+
+            const img = document.createElement('img');
+            img.src = entry.snapshotDataUrl;
+            img.alt = 'Bewegungsaufnahme';
+            img.className = 'w-20 h-14 object-cover';
+            imgBtn.appendChild(img);
+
+            imgBtn.addEventListener('click', () => openSnapshotLightbox(entry));
+            leftGroup.appendChild(imgBtn);
+          } else {
+            const iconBox = document.createElement('div');
+            iconBox.className = 'w-12 h-12 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 font-bold text-xs';
+            iconBox.textContent = `${entry.intensity}%`;
+            leftGroup.appendChild(iconBox);
+          }
+
+          const infoCol = document.createElement('div');
+          infoCol.className = 'min-w-0 flex-1';
+
+          const topRow = document.createElement('div');
+          topRow.className = 'flex items-center gap-2';
+
+          const titleEl = document.createElement('p');
+          titleEl.className = 'font-bold text-sm truncate';
+          titleEl.textContent = entry.description;
+
+          const pillEl = document.createElement('span');
+          pillEl.className = 'px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-[11px] font-bold shrink-0';
+          pillEl.textContent = `${entry.intensity}%`;
+
+          topRow.appendChild(titleEl);
+          topRow.appendChild(pillEl);
+
+          const dateEl = document.createElement('p');
+          dateEl.className = 'text-xs text-slate-500 dark:text-slate-400 mt-0.5';
+          dateEl.textContent = `${entry.date} • ${entry.time} Uhr`;
+
+          const regionEl = document.createElement('p');
+          regionEl.className = 'text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate';
+          regionEl.textContent = `Bereich: ${entry.regionLabel || 'Erkannt'}${entry.snapshotDataUrl ? ' • Bild tippen für Zoom' : ''}`;
+
+          infoCol.appendChild(topRow);
+          infoCol.appendChild(dateEl);
+          infoCol.appendChild(regionEl);
+          leftGroup.appendChild(infoCol);
+
+          const actionsCol = document.createElement('div');
+          actionsCol.className = 'flex items-center gap-1 shrink-0';
+
+          if (entry.snapshotDataUrl) {
+            const dlBtn = document.createElement('button');
+            dlBtn.type = 'button';
+            dlBtn.title = 'Foto herunterladen';
+            dlBtn.className = 'p-2 rounded-xl text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 transition';
+            dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>';
+            dlBtn.addEventListener('click', () => downloadSnapshotPng(entry));
+            actionsCol.appendChild(dlBtn);
+          }
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.title = 'Eintrag löschen';
+          delBtn.className = 'p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition';
+          delBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
+          delBtn.addEventListener('click', async () => {
+            await deleteLogEntry(entry.id);
+            renderLogsList();
+            showToast('Eintrag gelöscht');
+          });
+          actionsCol.appendChild(delBtn);
+
+          card.appendChild(leftGroup);
+          card.appendChild(actionsCol);
+          els.logsListContainer.appendChild(card);
+        });
+      }
+
+      function exportLogsCsv() {
+        if (logs.length === 0) {
+          showToast('Keine Einträge zum Exportieren vorhanden');
+          return;
+        }
+        const header = 'Datum;Uhrzeit;Ereignis;Bereich;Intensitaet_Prozent;Snapshot_Vorhanden\n';
+        const csvCell = value => {
+          let text = String(value ?? '');
+          // Prevent formula execution in spreadsheet programs.
+          if (/^[=+@\\-\\t\\r]/.test(text)) text = "'" + text;
+          return '"' + text.replace(/"/g, '""') + '"';
+        };
+        const rows = logs.map(l => [
+          csvCell(l.date), csvCell(l.time), csvCell(l.description),
+          csvCell(l.regionLabel || ''), csvCell(Number.isFinite(Number(l.intensity)) ? Number(l.intensity) : ''),
+          csvCell(l.snapshotDataUrl ? 'Ja' : 'Nein')
+        ].join(';')).join('\n');
+        const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `motion_guard_protokoll_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // Revoke after the browser has had a chance to start the download.
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('CSV-Protokoll heruntergeladen');
+      }
+
+      // =========================================================================
+      // 7. EINSTELLUNGEN SYNCHRONISIEREN & EVENT-LISTENER
+      // =========================================================================
+      function highlightChipGroup(selector, activeValue, attrName) {
+        document.querySelectorAll(selector).forEach(btn => {
+          const val = Number(btn.getAttribute(attrName));
+          if (val === activeValue) {
+            btn.className = btn.className
+              .replace(/bg-m3-lightCard|dark:bg-m3-darkCard|border-m3-lightBorder|dark:border-m3-darkBorder/g, '')
+              .trim() + ' bg-blue-600 text-white border-blue-600';
+          } else {
+            btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+            btn.classList.add('bg-m3-lightCard', 'dark:bg-m3-darkCard', 'border-m3-lightBorder', 'dark:border-m3-darkBorder');
+          }
+        });
+      }
+
+      function syncSettingsUI() {
+        els.setMotionEnabled.checked = settings.motionEnabled;
+        els.setSensitivity.value = settings.sensitivity;
+        els.valSensitivity.textContent = `${settings.sensitivity}%`;
+        els.quickSensLabel.textContent = `${settings.sensitivity}%`;
+
+        els.setNoiseFilter.checked = settings.noiseFilter;
+
+        els.setMinDuration.value = settings.minDuration;
+        els.valMinDuration.textContent = `${settings.minDuration} ms`;
+
+        els.setDetectionDelay.value = settings.detectionDelay;
+        els.valDetectionDelay.textContent = `${settings.detectionDelay} Sek.`;
+
+        els.setCooldown.value = settings.cooldown;
+        els.valCooldown.textContent = `${settings.cooldown} Sek.`;
+
+        els.setCenterZone.checked = settings.centerZoneOnly;
+        els.setShowHeatmap.checked = settings.showHeatmap;
+        els.setSaveSnapshots.checked = settings.saveSnapshots;
+        els.setVibration.checked = settings.vibrationEnabled;
+
+        els.setVolume.value = settings.alarmVolume;
+        els.valVolume.textContent = `${settings.alarmVolume}%`;
+
+        els.setFrontCamera.checked = settings.useFrontCamera;
+        els.setMirrorImage.checked = settings.mirrorImage;
+        els.setFlashlight.checked = settings.flashlightEnabled;
+        els.setDarkMode.checked = settings.darkMode;
+
+        highlightChipGroup('.alert-mode-btn', settings.alertMode, 'data-alert-mode');
+        highlightChipGroup('.alarm-tone-btn', settings.alarmTone, 'data-alarm-tone');
+        highlightChipGroup('.fps-btn', settings.analysisFps, 'data-fps');
+      }
+
+      // Navigation Events
+      els.navLogsBtn.addEventListener('click', () => switchView('logs'));
+      els.quickLogsLink.addEventListener('click', () => switchView('logs'));
+      els.navSettingsBtn.addEventListener('click', () => switchView('settings'));
+      els.logsBackBtn.addEventListener('click', () => switchView('main'));
+      els.settingsBackBtn.addEventListener('click', () => switchView('main'));
+
+      // Lightbox Events
+      els.lastCaptureImgWrap.addEventListener('click', () => openSnapshotLightbox(latestCaptureEntry));
+      els.lastCaptureOpenBtn.addEventListener('click', () => openSnapshotLightbox(latestCaptureEntry));
+      els.lightboxCloseBtn.addEventListener('click', closeSnapshotLightbox);
+      els.snapshotLightbox.addEventListener('click', (e) => {
+        if (e.target === els.snapshotLightbox) closeSnapshotLightbox();
+      });
+      els.lightboxDownloadBtn.addEventListener('click', () => downloadSnapshotPng(activeLightboxEntry));
+
+      // Start / Stop Monitoring
+      els.toggleMonitoringBtn.addEventListener('click', () => {
+        if (isMonitoring) {
+          stopMonitoring();
+        } else {
+          startMonitoring();
+        }
+      });
+
+      // Quick Camera Flip & Torch
+      els.quickFlipBtn.addEventListener('click', async () => {
+        if (isStartingCamera) return;
+        settings.useFrontCamera = !settings.useFrontCamera;
+        if (settings.useFrontCamera) settings.flashlightEnabled = false;
+        saveSettings();
+        syncSettingsUI();
+        if (isMonitoring) {
+          stopMonitoring();
+          await startMonitoring();
+        }
+        showToast(settings.useFrontCamera ? 'Frontkamera aktiv' : 'Rückkamera aktiv');
+      });
+
+      els.quickTorchBtn.addEventListener('click', async () => {
+        if (settings.useFrontCamera) {
+          showToast('Taschenlampe nur bei Rückkamera verfügbar');
+          return;
+        }
+        settings.flashlightEnabled = !settings.flashlightEnabled;
+        saveSettings();
+        syncSettingsUI();
+        await applyCameraConstraints();
+        showToast(settings.flashlightEnabled ? 'Taschenlampe eingeschaltet' : 'Taschenlampe ausgeschaltet');
+      });
+
+      // Logs Screen Actions
+      els.exportLogsBtn.addEventListener('click', exportLogsCsv);
+      els.clearAllLogsBtn.addEventListener('click', () => {
+        if (logs.length === 0) return;
+        showModal({
+          title: 'Gesamtes Protokoll löschen?',
+          paragraphs: [
+            'Möchtest du wirklich alle aufgezeichneten Bewegungsereignisse inklusive aller gespeicherten Detail-Snapshots unwiderruflich löschen?'
+          ],
+          buttons: [
+            { label: 'Abbrechen' },
+            {
+              label: 'Alle löschen',
+              danger: true,
+              onClick: async () => {
+                await clearAllLogsFromDB();
+                renderLogsList();
+                showToast('Protokoll & Snapshots gelöscht');
+              }
+            }
+          ]
+        });
+      });
+
+      // Settings Inputs Bindings
+      els.setMotionEnabled.addEventListener('change', e => {
+        settings.motionEnabled = e.target.checked;
+        saveSettings();
+      });
+
+      els.setSensitivity.addEventListener('input', e => {
+        settings.sensitivity = Number(e.target.value);
+        els.valSensitivity.textContent = `${settings.sensitivity}%`;
+        els.quickSensLabel.textContent = `${settings.sensitivity}%`;
+        saveSettings();
+      });
+
+      document.querySelectorAll('.sens-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          settings.sensitivity = Number(btn.getAttribute('data-sens-preset'));
+          saveSettings();
+          syncSettingsUI();
+          showToast(`Empfindlichkeit auf ${settings.sensitivity}% gesetzt`);
+        });
+      });
+
+      els.setNoiseFilter.addEventListener('change', e => {
+        settings.noiseFilter = e.target.checked;
+        previousLumaFrame = null;
+        saveSettings();
+      });
+
+      els.setMinDuration.addEventListener('input', e => {
+        settings.minDuration = Number(e.target.value);
+        els.valMinDuration.textContent = `${settings.minDuration} ms`;
+        saveSettings();
+      });
+
+      els.setDetectionDelay.addEventListener('input', e => {
+        settings.detectionDelay = Number(e.target.value);
+        els.valDetectionDelay.textContent = `${settings.detectionDelay} Sek.`;
+        saveSettings();
+      });
+
+      els.setCooldown.addEventListener('input', e => {
+        settings.cooldown = Number(e.target.value);
+        els.valCooldown.textContent = `${settings.cooldown} Sek.`;
+        saveSettings();
+      });
+
+      els.setCenterZone.addEventListener('change', e => {
+        settings.centerZoneOnly = e.target.checked;
+        saveSettings();
+        applyCameraConstraints();
+      });
+
+      els.setShowHeatmap.addEventListener('change', e => {
+        settings.showHeatmap = e.target.checked;
+        saveSettings();
+        applyCameraConstraints();
+      });
+
+      els.setSaveSnapshots.addEventListener('change', e => {
+        settings.saveSnapshots = e.target.checked;
+        saveSettings();
+      });
+
+      document.querySelectorAll('.alert-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          settings.alertMode = Number(btn.getAttribute('data-alert-mode'));
+          saveSettings();
+          syncSettingsUI();
+        });
+      });
+
+      els.setVibration.addEventListener('change', e => {
+        settings.vibrationEnabled = e.target.checked;
+        saveSettings();
+      });
+
+      document.querySelectorAll('.alarm-tone-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          settings.alarmTone = Number(btn.getAttribute('data-alarm-tone'));
+          saveSettings();
+          syncSettingsUI();
+        });
+      });
+
+      els.setVolume.addEventListener('input', e => {
+        settings.alarmVolume = Number(e.target.value);
+        els.valVolume.textContent = `${settings.alarmVolume}%`;
+        saveSettings();
+      });
+
+      els.testAlarmBtn.addEventListener('click', () => {
+        playAlarmSound(settings.alarmTone, settings.alarmVolume);
+        if (settings.vibrationEnabled) triggerVibration();
+        showToast('Testalarm ausgelöst');
+      });
+
+      els.setFrontCamera.addEventListener('change', async e => {
+        settings.useFrontCamera = e.target.checked;
+        if (settings.useFrontCamera) settings.flashlightEnabled = false;
+        saveSettings();
+        syncSettingsUI();
+        if (isMonitoring) {
+          stopMonitoring();
+          await startMonitoring();
+        }
+      });
+
+      els.setMirrorImage.addEventListener('change', e => {
+        settings.mirrorImage = e.target.checked;
+        saveSettings();
+        applyCameraConstraints();
+      });
+
+      els.setFlashlight.addEventListener('change', e => {
+        settings.flashlightEnabled = e.target.checked;
+        saveSettings();
+        applyCameraConstraints();
+      });
+
+      document.querySelectorAll('.fps-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          settings.analysisFps = Number(btn.getAttribute('data-fps'));
+          saveSettings();
+          syncSettingsUI();
+          applyCameraConstraints();
+          if (isMonitoring) startAnalysisLoop();
+        });
+      });
+
+      els.setDarkMode.addEventListener('change', e => {
+        settings.darkMode = e.target.checked;
+        saveSettings();
+        applyTheme();
+      });
+
+      els.openPrivacyBtn.addEventListener('click', () => {
+        showModal({
+          title: 'Datenschutzinformationen',
+          paragraphs: [
+            { label: '100 % lokale Verarbeitung:', text: 'Kamerabilder werden lokal im Browser verarbeitet. Bewegungs-Snapshots werden lokal in IndexedDB gespeichert, sofern der Browser dies unterstützt; andernfalls bleiben Protokolle nur bis zum Schließen bzw. Neuladen der Seite im Arbeitsspeicher.' },
+            { label: 'Keine Cloud & kein Server:', text: 'Es werden keinerlei Bilder, Videos oder Protokolldaten ins Internet übertragen.' },
+            { label: 'Kein Mikrofonzugriff:', text: 'Die Kamera wird strikt ohne Audiostream angefordert.' },
+            { label: 'Volle Transparenz:', text: 'Die Kamera ist ausschließlich aktiv, nachdem du die Überwachung ausdrücklich gestartet hast.' }
+          ],
+          buttons: [{ label: 'Verstanden', primary: true }]
+        });
+      });
+
+      els.openAboutBtn.addEventListener('click', () => {
+        showModal({
+          title: 'Über Motion Guard',
+          paragraphs: [
+            { label: 'Motion Guard – Motion Detection Camera (v2.0):', text: 'Lokale Überwachungskamera mit 3×3-Rauschfilter, Echtzeit-Luminanz-Differencing, automatischer Objekt-Detail-Hervorhebung, IndexedDB-Snapshot-Archiv und Web Audio Synthesizer.' }
+          ],
+          buttons: [{ label: 'Schließen', primary: true }]
+        });
+      });
+
+      els.resetSettingsBtn.addEventListener('click', () => {
+        showModal({
+          title: 'Einstellungen zurücksetzen?',
+          paragraphs: [
+            'Alle Einstellungen werden auf die Standardwerte zurückgesetzt. Das Bewegungsprotokoll bleibt erhalten.'
+          ],
+          buttons: [
+            { label: 'Abbrechen' },
+            {
+              label: 'Zurücksetzen',
+              danger: true,
+              onClick: () => {
+                settings = { ...DEFAULT_SETTINGS };
+                saveSettings();
+                applyTheme();
+                syncSettingsUI();
+                applyCameraConstraints();
+                if (isMonitoring) startAnalysisLoop();
+                showToast('Standardeinstellungen wiederhergestellt');
+              }
+            }
+          ]
+        });
+      });
+
+      // Re-acquire Wake Lock if tab becomes visible again during monitoring
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && isMonitoring) {
+          requestWakeLock();
+        }
+      });
+
+      // Clean shutdown on page unload
+      window.addEventListener('beforeunload', () => {
+        if (isMonitoring) stopMonitoring();
+      });
+
+      // Initial Boot
+      applyTheme();
+      syncSettingsUI();
+      loadAllLogsFromDB();
+    })();
+  </script>
+</body>
+</html>
